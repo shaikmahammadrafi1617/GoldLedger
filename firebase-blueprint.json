@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Gold loan balance transfer transaction record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "customerPhone": { "type": "string", "maxLength": 20 },
+        "releaseBank": { "type": "string", "maxLength": 100 },
+        "targetBank": { "type": "string", "maxLength": 100 },
+        "agentId": { "type": "string", "maxLength": 128 },
+        "agentName": { "type": "string", "maxLength": 100 },
+        "principal": { "type": "number" },
+        "givenDate": { "type": "string", "maxLength": 30 },
+        "returnDate": { "type": "string", "maxLength": 30 },
+        "customerRatePerLakh": { "type": "number" },
+        "ratePeriod": { "type": "string", "enum": ["per_day", "per_month"] },
+        "status": { "type": "string", "enum": ["active", "completed", "needs_followup"] },
+        "durationDays": { "type": "number" },
+        "actualMoneyReceived": { "type": "number" },
+        "finalGrossInterest": { "type": "number" },
+        "finalOwnerProfit": { "type": "number" },
+        "finalAgentCommission": { "type": "number" },
+        "finalInvestorShare": { "type": "number" },
+        "agentCommissionSettled": { "type": "boolean" },
+        "enableProfitSharing": { "type": "boolean" },
+        "agentCommissionRatePerLakh": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "userId", "principal", "givenDate", "customerRatePerLakh", "status"]
+    },
+    "Agent": {
+      "title": "Agent",
+      "description": "Commission agent or field broker for balance transfers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "upiOrBank": { "type": "string", "maxLength": 100 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "userId", "name"]
+    },
+    "Investor": {
+      "title": "Investor",
+      "description": "Capital investor funding balance transfers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "totalCapital": { "type": "number" },
+        "upiOrBank": { "type": "string", "maxLength": 100 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "userId", "name"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Audit record of daily operations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "maxLength": 50 },
+        "action": { "type": "string", "enum": ["create", "update", "delete", "settle", "complete", "edit"] },
+        "details": { "type": "string", "maxLength": 500 },
+        "customerOrAgent": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "userId", "timestamp", "action", "details"]
+    },
+    "OwnerSettings": {
+      "title": "OwnerSettings",
+      "description": "User preferences and security configurations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "securityLockEnabled": { "type": "boolean" },
+        "pinCode": { "type": "string", "maxLength": 10 },
+        "defaultCustomerRatePerLakh": { "type": "number" },
+        "defaultAgentRatePerLakh": { "type": "number" },
+        "defaultInvestorRatePerLakh": { "type": "number" },
+        "language": { "type": "string", "enum": ["en", "te"] }
+      },
+      "required": ["id", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Transactions owned and accessed only by the user."
+    },
+    "/users/{userId}/agents/{agentId}": {
+      "schema": "Agent",
+      "description": "Agents managed by the user."
+    },
+    "/users/{userId}/investors/{investorId}": {
+      "schema": "Investor",
+      "description": "Investors partnering with the user."
+    },
+    "/users/{userId}/logs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "Audit logs for operations."
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": "OwnerSettings",
+      "description": "Settings for the owner."
+    }
+  }
+}

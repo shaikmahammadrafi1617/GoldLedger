@@ -1,0 +1,7 @@
+{
+  "name": "GoldLedger",
+  "description": "Simple Android app for gold loan balance transfers with Firebase cloud sync: transfer money, fix interest, calculate collection amount, pay investors/agents, and call the day.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
