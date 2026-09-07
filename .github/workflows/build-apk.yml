@@ -1,0 +1,66 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build GoldLedger Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build Vite static assets
+        run: npm run build
+
+      - name: Setup Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Initialize Capacitor Android Platform
+        run: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Ensure Internet & Network Permissions in Android Manifest
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            if ! grep -q "android.permission.INTERNET" "$MANIFEST"; then
+              sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST"
+            fi
+            if ! grep -q "android.permission.ACCESS_NETWORK_STATE" "$MANIFEST"; then
+              sed -i '/<application/i \    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' "$MANIFEST"
+            fi
+          fi
+
+      - name: Build Debug APK with Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GoldLedger-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

@@ -142,7 +142,38 @@ GoldLedger/
 | `npm run build` | Compiles and bundles production static assets into `dist/` |
 | `npm run preview` | Previews the production build locally |
 | `npm run lint` | Runs TypeScript compiler checks (`tsc --noEmit`) |
+| `npm run cap:build` | Compiles web app and synchronizes into Android project |
+| `npm run cap:open` | Opens the native project in Android Studio |
 | `npm run clean` | Removes build directories and temporary files |
+
+---
+
+## 🤖 Generating the Android `.apk`
+
+This repository includes a ready-to-run **Capacitor** native Android integration and an **automated GitHub Actions workflow** to build your `.apk` without manual setup.
+
+### Method A: Automated GitHub Actions (Recommended — 1-Click Download)
+1. Push this repository to **GitHub**.
+2. Go to the **Actions** tab in your GitHub repository.
+3. Select **"Build Android APK"** and click **Run workflow**.
+4. Once completed, download the **`GoldLedger-Android-APK`** artifact from the build summary.
+5. The downloaded `.zip` contains the ready-to-install `app-debug.apk` file!
+
+### Method B: Build Locally with Android Studio
+1. Clone the repository and install dependencies:
+   ```bash
+   npm install
+   ```
+2. Build the web distribution and sync to Android:
+   ```bash
+   npm run cap:build
+   ```
+3. Open the project in Android Studio:
+   ```bash
+   npm run cap:open
+   ```
+4. In Android Studio, go to **Build** > **Build Bundle(s) / APK(s)** > **Build APK(s)**.
+5. Find the compiled APK inside `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ---
 
