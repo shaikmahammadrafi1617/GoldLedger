@@ -1,5 +1,8 @@
 {
-  "firestore": {
-    "rules": "firestore.rules"
-  }
+  "firestore": [
+    {
+      "database": "ai-studio-goldledger-cb8d516c-58ce-4163-b0ec-161ff1e550f6",
+      "rules": "firestore.rules"
+    }
+  ]
 }
