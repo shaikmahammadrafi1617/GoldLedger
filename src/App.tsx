@@ -63,7 +63,13 @@ export function App() {
   // Firebase Auth State
   const [user, setUser] = useState<User | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
-  const [guestMode, setGuestMode] = useState<boolean>(false);
+  const [guestMode, setGuestMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('goldledger_guest_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -272,6 +278,7 @@ export function App() {
 
   // Auth Actions
   const handleSignIn = () => {
+    localStorage.removeItem('goldledger_guest_mode');
     setGuestMode(false);
   };
 
@@ -279,6 +286,7 @@ export function App() {
     try {
       await logOut();
       setUser(null);
+      localStorage.removeItem('goldledger_guest_mode');
       setGuestMode(false);
       setToast({
         id: 'toast-' + Date.now(),
@@ -537,6 +545,9 @@ export function App() {
             language={language}
             onLanguageChange={setLanguage}
             onSuccess={(authenticatedUser) => {
+              try {
+                localStorage.removeItem('goldledger_guest_mode');
+              } catch {}
               setUser(authenticatedUser);
               setToast({
                 id: 'toast-' + Date.now(),
@@ -547,7 +558,12 @@ export function App() {
                   : `Signed in as ${authenticatedUser.displayName || authenticatedUser.email}`,
               });
             }}
-            onSkipOffline={() => setGuestMode(true)}
+            onSkipOffline={() => {
+              try {
+                localStorage.setItem('goldledger_guest_mode', 'true');
+              } catch {}
+              setGuestMode(true);
+            }}
           />
         </div>
         {/* Floating toggle for desktop preview */}

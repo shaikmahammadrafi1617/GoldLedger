@@ -11,7 +11,11 @@ import {
   CheckCircle2, 
   Globe, 
   Sparkles,
-  HelpCircle
+  HelpCircle,
+  Copy,
+  ExternalLink,
+  Zap,
+  Info
 } from 'lucide-react';
 import { 
   signInWithEmail, 
@@ -45,20 +49,40 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [unauthorizedDomainError, setUnauthorizedDomainError] = useState<boolean>(false);
+  const [copiedDomain, setCopiedDomain] = useState<boolean>(false);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
+
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
 
   // Friendly error translation
   const parseAuthError = (err: any): string => {
     const code = err?.code || '';
     const msg = err?.message || String(err);
 
+    if (code === 'auth/unauthorized-domain') {
+      setUnauthorizedDomainError(true);
+      return language === 'te'
+        ? `గూగుల్ సైన్-ఇన్ కి "${currentHost}" డొమైన్ Firebase లో అనుమతించబడలేదు. కింద ఉన్న 'డైరెక్ట్ మోడ్' ద్వారా వెంటనే యాప్‌లోకి ప్రవేశించవచ్చు లేదా ఈమెయిల్‌తో ఖాతా తెరవండి.`
+        : `Google Sign-In is not authorized on "${currentHost}". Firebase Console requires this domain in Authorized Domains. You can tap Direct Access below to proceed instantly!`;
+    }
+    if (code === 'auth/operation-not-allowed') {
+      return language === 'te'
+        ? 'ఈ సైన్-ఇన్ పద్ధతి Firebase లో ఇంకా ప్రారంభించబడలేదు. దయచేసి కింద ఉన్న డైరెక్ట్ మోడ్ ఉపయోగించండి.'
+        : 'This sign-in method is currently disabled in your Firebase console. Please use Direct Access below.';
+    }
+    if (code === 'auth/popup-blocked') {
+      return language === 'te'
+        ? 'బ్రౌజర్ పాప్-అప్ ని బ్లాక్ చేసింది. దయచేసి పాప్-అప్ లకు అనుమతి ఇవ్వండి.'
+        : 'Popup was blocked by browser. Please allow popups for this site.';
+    }
     if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
       return language === 'te' 
-        ? 'ఇమెయిల్ లేదా పాస్‌వర్డ్ సరైనది కాదు. దయచేసి మళ్ళీ ప్రయత్నించండి.'
-        : 'Incorrect email or password. Please verify and try again.';
+        ? 'ఇమెయిల్ లేదా పాస్‌వర్డ్ సరైనది కాదు. కొత్తవారైతే "కొత్త ఖాతా" ట్యాబ్ క్లిక్ చేయండి.'
+        : 'Incorrect email or password. If you are new, tap the "New Account" tab above.';
     }
     if (code === 'auth/email-already-in-use') {
       return language === 'te'
@@ -262,7 +286,61 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         </div>
 
         {/* Status Alerts */}
-        {errorMessage && (
+        {unauthorizedDomainError && (
+          <div className="bg-amber-950/70 border border-amber-500/60 rounded-2xl p-3.5 space-y-2.5 text-xs text-amber-100 shadow-xl">
+            <div className="flex items-start space-x-2">
+              <Info className="w-4 h-4 text-[#C5A059] shrink-0 mt-0.5" />
+              <div className="flex-1 font-semibold text-white">
+                {language === 'te' 
+                  ? 'గూగుల్ లాగిన్ డొమైన్ అనుమతి అవసరం' 
+                  : 'Google Sign-In: Domain Needs Authorization'}
+              </div>
+            </div>
+            
+            <p className="text-[11px] text-amber-200/90 leading-relaxed">
+              {language === 'te'
+                ? `ఈ యాప్ రన్ అవుతున్న డొమైన్ Firebase లో ఇంకా నమోదు కాలేదు. వెంటనే యాప్‌ను ఉపయోగించడానికి కింద ఉన్న "డైరెక్ట్ యాక్సెస్" బటన్ నొక్కండి:`
+                : `Firebase blocks Google popups until this preview domain is added to Authorized Domains in Firebase Console. You can enter immediately via Direct Access:`}
+            </p>
+
+            {/* Hostname Copy Chip */}
+            {currentHost && (
+              <div className="flex items-center justify-between bg-slate-900/90 border border-amber-500/30 rounded-xl p-2 font-mono text-[11px] text-[#C5A059]">
+                <span className="truncate pr-2">{currentHost}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(currentHost);
+                    setCopiedDomain(true);
+                    setTimeout(() => setCopiedDomain(false), 2500);
+                  }}
+                  className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-[#C5A059] rounded-lg text-[10px] font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>{copiedDomain ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Immediate Direct Access Button inside alert */}
+            {onSkipOffline && (
+              <button
+                type="button"
+                onClick={onSkipOffline}
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#C5A059] to-[#9a7836] text-slate-950 font-black text-xs shadow-md flex items-center justify-center space-x-1.5 transition active:scale-98 cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>
+                  {language === 'te' 
+                    ? 'తక్షణ ప్రవేశం (డైరెక్ట్ మోడ్)' 
+                    : 'Enter Directly (No Waiting)'}
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {errorMessage && !unauthorizedDomainError && (
           <div className="bg-rose-950/50 border border-rose-600/50 rounded-2xl p-3 flex items-start space-x-2.5 text-xs text-rose-200">
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
             <div className="flex-1">{errorMessage}</div>
@@ -447,18 +525,26 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           )}
         </button>
 
-        {/* Offline Emergency Option */}
+        {/* Direct Access Option */}
         {onSkipOffline && (
-          <div className="text-center pt-2">
+          <div className="pt-2">
             <button
               type="button"
               onClick={onSkipOffline}
-              className="text-xs text-slate-500 hover:text-slate-300 font-medium cursor-pointer transition"
+              className="w-full py-2.5 px-3 rounded-2xl bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center space-x-2 transition active:scale-98 cursor-pointer shadow-xs"
             >
-              {language === 'te' 
-                ? '⚡ ఇంటర్నెట్ లేదా? ఆఫ్‌లైన్ లోకల్ మోడ్‌లో చూడండి' 
-                : '⚡ No internet right now? Open Local Offline Mode'}
+              <Zap className="w-3.5 h-3.5 text-[#C5A059]" />
+              <span>
+                {language === 'te' 
+                  ? 'నేరుగా లెడ్జర్‌లోకి వెళ్ళండి (డైరెక్ట్ మోడ్)' 
+                  : 'Open Ledger Directly (Instant Access)'}
+              </span>
             </button>
+            <p className="text-[10px] text-slate-500 text-center mt-1.5">
+              {language === 'te'
+                ? 'ఖాతా అవసరం లేదు • లెక్కలు ఈ పరికరంలో సురక్షితంగా నిల్వ ఉంటాయి'
+                : 'No login required • Calculations stay saved on this device'}
+            </p>
           </div>
         )}
       </div>
