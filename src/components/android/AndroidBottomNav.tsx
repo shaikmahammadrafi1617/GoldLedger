@@ -3,7 +3,8 @@ import {
   PlusCircle, 
   Clock, 
   HandCoins, 
-  CheckCheck 
+  CheckCheck,
+  CalendarDays
 } from 'lucide-react';
 import { Language } from '../../types';
 
@@ -29,15 +30,21 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
     },
     {
       id: 'active',
-      labelEn: 'Active Deals',
+      labelEn: 'Active',
       labelTe: 'నడుస్తున్నవి',
       icon: Clock,
       badge: activeCount,
     },
     {
+      id: 'calendar',
+      labelEn: 'Calendar',
+      labelTe: 'క్యాలెండర్',
+      icon: CalendarDays,
+    },
+    {
       id: 'settle',
-      labelEn: 'Settle & Split',
-      labelTe: 'వసూలు & పంచడం',
+      labelEn: 'Settle',
+      labelTe: 'వసూలు',
       icon: HandCoins,
     },
     {
@@ -49,7 +56,7 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
   ];
 
   return (
-    <nav className="bg-white border-t border-slate-200 px-2 py-2 flex items-center justify-around sticky bottom-0 z-30 shadow-lg select-none">
+    <nav className="bg-white border-t border-slate-200 px-1 py-1.5 flex items-center justify-around sticky bottom-0 z-40 shadow-lg select-none shrink-0">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
@@ -60,7 +67,7 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
             key={tab.id}
             type="button"
             onClick={() => onTabChange(tab.id)}
-            className={`flex-1 py-1.5 px-1 rounded-xl flex flex-col items-center justify-center relative transition-all duration-200 active:scale-95 ${
+            className={`flex-1 py-1 px-0.5 rounded-xl flex flex-col items-center justify-center relative transition-all duration-200 active:scale-95 cursor-pointer ${
               isActive 
                 ? 'text-[#C5A059]' 
                 : 'text-slate-500 hover:text-slate-800'
@@ -82,7 +89,7 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
 
             {/* Badge */}
             {tab.badge !== undefined && tab.badge > 0 && (
-              <span className="absolute top-0.5 right-[20%] bg-emerald-600 text-white text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
+              <span className="absolute top-0.5 right-[15%] bg-emerald-600 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
                 {tab.badge}
               </span>
             )}
@@ -92,3 +99,4 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
     </nav>
   );
 };
+

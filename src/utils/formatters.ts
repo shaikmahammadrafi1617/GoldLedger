@@ -1,4 +1,4 @@
-import { Transaction } from '../types';
+import { Transaction, Language } from '../types';
 
 /**
  * Format a number into standard Indian Currency format (e.g. ₹1,00,000)
@@ -192,4 +192,53 @@ export function calculateFinancials(
     ownerNetProfit,
     investorBreakdowns,
   };
+}
+
+/**
+ * Get date string (YYYY-MM-DD) for a specific number of days in the past
+ */
+export function getPastDateString(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get human readable relative day label (e.g. "Today", "Yesterday", "2 days ago")
+ */
+export function getRelativeDaysLabel(dateStr: string, language: Language = 'en'): string {
+  if (!dateStr) return '';
+  const today = getTodayDateString();
+  if (dateStr === today) {
+    return language === 'te' ? 'ఈ రోజు' : 'Today';
+  }
+
+  const [y1, m1, d1] = today.split('-').map(Number);
+  const [y2, m2, d2] = dateStr.split('-').map(Number);
+
+  const t1 = Date.UTC(y1, m1 - 1, d1);
+  const t2 = Date.UTC(y2, m2 - 1, d2);
+  const diffDays = Math.round((t1 - t2) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 1) {
+    return language === 'te' ? 'నిన్న (1 రోజు క్రితం)' : 'Yesterday';
+  }
+  if (diffDays === 2) {
+    return language === 'te' ? '2 రోజుల క్రితం' : '2 days ago';
+  }
+  if (diffDays > 0) {
+    return language === 'te' ? `${diffDays} రోజుల క్రితం` : `${diffDays} days ago`;
+  }
+  if (diffDays === -1) {
+    return language === 'te' ? 'రేపు' : 'Tomorrow';
+  }
+  if (diffDays < 0) {
+    const abs = Math.abs(diffDays);
+    return language === 'te' ? `${abs} రోజుల తర్వాత` : `In ${abs} days`;
+  }
+
+  return formatDateReadable(dateStr);
 }

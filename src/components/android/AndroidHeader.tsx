@@ -168,10 +168,10 @@ export const AndroidHeader: React.FC<AndroidHeaderProps> = ({
                     setShowProfileMenu(false);
                     onSignOut();
                   }}
-                  className="w-full py-1.5 px-2 rounded-xl text-rose-600 hover:bg-rose-50 font-bold flex items-center space-x-1.5 transition text-left"
+                  className="w-full py-2 px-2.5 rounded-xl text-rose-600 hover:bg-rose-50 font-bold flex items-center space-x-2 transition text-left cursor-pointer active:scale-95"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Sign Out</span>
+                  <LogOut className="w-4 h-4 text-rose-600" />
+                  <span>{language === 'te' ? 'లాగౌట్ (Sign Out)' : 'Sign Out'}</span>
                 </button>
               </div>
             )}
@@ -180,11 +180,11 @@ export const AndroidHeader: React.FC<AndroidHeaderProps> = ({
           <button
             type="button"
             onClick={onSignIn}
-            className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-bold flex items-center space-x-1 shadow-xs transition active:scale-95"
-            title="Sign in with Google to sync to Firebase Cloud"
+            className="px-2 py-1 bg-[#C5A059] hover:bg-[#b08e4d] text-slate-950 rounded-lg text-[11px] font-bold flex items-center space-x-1 shadow-xs transition active:scale-95 cursor-pointer"
+            title="Sign in or register account"
           >
-            <Cloud className="w-3 h-3" />
-            <span>Sync</span>
+            <UserIcon className="w-3 h-3" />
+            <span>{language === 'te' ? 'లాగిన్' : 'Login'}</span>
           </button>
         )}
 
