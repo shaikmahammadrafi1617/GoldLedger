@@ -217,27 +217,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 <Coins className="w-4 h-4" />
                 <span>Principal Money Given (అసలు)</span>
               </label>
-              <span className="text-[11px] text-slate-500 font-semibold">
-                {(principal / 100000).toFixed(1)} Lakhs ({formatINR(principal)})
-              </span>
-            </div>
-
-            {/* Quick Amount Buttons */}
-            <div className="flex flex-wrap gap-1.5">
-              {[100000, 200000, 300000, 400000, 500000, 1000000].map((amt) => (
-                <button
-                  type="button"
-                  key={amt}
-                  onClick={() => setPrincipal(amt)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition ${
-                    principal === amt
-                      ? 'bg-[#C5A059] text-white border-[#C5A059] font-bold shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  {amt >= 100000 ? `₹${amt / 100000}L` : `₹${amt}`}
-                </button>
-              ))}
+              {principal > 0 && (
+                <span className="text-[11px] text-slate-500 font-semibold">
+                  {(principal / 100000).toFixed(1)} Lakhs ({formatINR(principal)})
+                </span>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

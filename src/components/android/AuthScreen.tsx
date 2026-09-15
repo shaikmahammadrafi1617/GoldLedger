@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { 
   ShieldCheck, 
   Lock, 
@@ -15,7 +16,8 @@ import {
   Copy,
   ExternalLink,
   Zap,
-  Info
+  Info,
+  Smartphone
 } from 'lucide-react';
 import { 
   signInWithEmail, 
@@ -57,11 +59,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [resetLoading, setResetLoading] = useState(false);
 
   const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isNative = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
 
   // Friendly error translation
   const parseAuthError = (err: any): string => {
     const code = err?.code || '';
     const msg = err?.message || String(err);
+
+    if (
+      code === 'auth/missing-initial-state' ||
+      msg.toLowerCase().includes('missing initial state') ||
+      msg.toLowerCase().includes('storage-partitioned') ||
+      msg.toLowerCase().includes('sessionstorage')
+    ) {
+      return language === 'te'
+        ? 'Android APK వెబ్‌వ్యూలో గూగుల్ వెబ్ పాప్-అప్ పనిచేయదు. దయచేసి పైన ఉన్న ఇమెయిల్ & పాస్‌వర్డ్ ద్వారా లాగిన్ అవ్వండి లేదా కింద ఉన్న "డైరెక్ట్ మోడ్" బటన్ నొక్కండి.'
+        : 'Google Web Popup cannot run inside the Android APK WebView. Please log in using Email & Password above, or tap "Open Ledger Directly" below.';
+    }
 
     if (code === 'auth/unauthorized-domain') {
       setUnauthorizedDomainError(true);
@@ -169,6 +183,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const handleGoogleSignIn = async () => {
     setErrorMessage(null);
     setSuccessNotice(null);
+
+    // In Capacitor Android WebView, window.open / Google web popups cannot maintain sessionStorage
+    if (isNative) {
+      setErrorMessage(
+        language === 'te'
+          ? 'Android APK లో గూగుల్ వెబ్ పాప్-అప్ పనిచేయదు. దయచేసి పైన ఉన్న ఇమెయిల్ & పాస్‌వర్డ్ తో లాగిన్ అవ్వండి లేదా కింద ఉన్న "డైరెక్ట్ మోడ్" నొక్కండి.'
+          : 'Google Web Popup is not supported inside the Android APK. Please use Email & Password above or tap "Open Ledger Directly" below.'
+      );
+      return;
+    }
+
     setGoogleLoading(true);
     try {
       const u = await signInWithGoogle();
@@ -284,6 +309,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             {language === 'te' ? 'కొత్త ఖాతా (Register)' : 'New Account'}
           </button>
         </div>
+
+        {/* Native Android APK Hint */}
+        {isNative && (
+          <div className="flex items-center justify-center space-x-2 text-[11px] text-[#C5A059] bg-[#C5A059]/10 border border-[#C5A059]/30 rounded-xl px-3 py-2">
+            <Smartphone className="w-3.5 h-3.5 shrink-0" />
+            <span className="font-semibold text-center">
+              {language === 'te' 
+                ? 'Android APK: ఇమెయిల్ & పాస్‌వర్డ్ లేదా డైరెక్ట్ మోడ్ ఉపయోగించండి' 
+                : 'Android App: Sign in with Email & Password or Direct Mode'}
+            </span>
+          </div>
+        )}
 
         {/* Status Alerts */}
         {unauthorizedDomainError && (
@@ -521,6 +558,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 />
               </svg>
               <span>{language === 'te' ? 'గూగుల్ తో కొనసాగించండి' : 'Continue with Google'}</span>
+              {isNative && (
+                <span className="text-[10px] text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-500/30 ml-auto">
+                  {language === 'te' ? 'బ్రౌజర్ లో మాత్రమే' : 'Browser Only'}
+                </span>
+              )}
             </>
           )}
         </button>

@@ -81,39 +81,12 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
     setPrincipalStr(num > 0 ? formatNumberWithCommas(num) : '');
   };
 
-  // Quick Amount Addition with commas
-  const addAmount = (amount: number) => {
-    setPrincipal((prev) => {
-      const next = prev + amount;
-      setPrincipalStr(next > 0 ? formatNumberWithCommas(next) : '');
-      return next;
-    });
-  };
-
-  const clearAmount = () => {
-    setPrincipal(0);
-    setPrincipalStr('');
-  };
-
   // Handle rate input
   const handleRateInput = (value: string) => {
     const rawDigits = value.replace(/\D/g, '');
     const num = rawDigits ? parseInt(rawDigits, 10) : 0;
     setCustomerRatePerLakh(num);
     setCustomerRateStr(num > 0 ? formatNumberWithCommas(num) : '');
-  };
-
-  const addRate = (delta: number) => {
-    setCustomerRatePerLakh((prev) => {
-      const next = prev + delta;
-      setCustomerRateStr(next > 0 ? formatNumberWithCommas(next) : '');
-      return next;
-    });
-  };
-
-  const clearRate = () => {
-    setCustomerRatePerLakh(0);
-    setCustomerRateStr('');
   };
 
   // Calculations per day
@@ -329,8 +302,8 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
           )}
         </div>
 
-        {/* 1. Amount Transferred (Principal) with Calculator Buttons */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
+        {/* 1. Amount Transferred (Principal) */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
               <span>₹</span>
@@ -343,7 +316,7 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
             )}
           </div>
 
-          {/* Big Amount Input - Empty by default, no default numbers */}
+          {/* Big Amount Input - Clean & Direct */}
           <div className="relative">
             <span className="absolute left-3.5 top-2.5 text-xl font-bold text-slate-400">₹</span>
             <input
@@ -351,51 +324,19 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
               inputMode="numeric"
               value={principalStr}
               onChange={(e) => handlePrincipalInput(e.target.value)}
-              placeholder="Enter amount"
-              className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-2xl font-black font-mono text-[#1E293B] focus:outline-none focus:border-[#C5A059] focus:bg-white tracking-wide"
+              placeholder="Enter amount (e.g. 2,00,000)"
+              className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-2xl font-black font-mono text-[#1E293B] focus:outline-none focus:border-[#C5A059] focus:bg-white tracking-wide"
               required
             />
-          </div>
-
-          {/* Fast Calculator Addition Keys with Indian Comma Formatting */}
-          <div className="grid grid-cols-4 gap-1.5 pt-1">
-            <button
-              type="button"
-              onClick={() => addAmount(50000)}
-              className="py-2 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 rounded-xl text-xs font-bold font-mono transition text-center"
-            >
-              +50,000
-            </button>
-            <button
-              type="button"
-              onClick={() => addAmount(100000)}
-              className="py-2 bg-[#C5A059]/15 hover:bg-[#C5A059]/25 active:scale-95 text-[#9a7836] rounded-xl text-xs font-extrabold font-mono transition text-center"
-            >
-              +1,00,000
-            </button>
-            <button
-              type="button"
-              onClick={() => addAmount(200000)}
-              className="py-2 bg-[#C5A059]/15 hover:bg-[#C5A059]/25 active:scale-95 text-[#9a7836] rounded-xl text-xs font-extrabold font-mono transition text-center"
-            >
-              +2,00,000
-            </button>
-            <button
-              type="button"
-              onClick={clearAmount}
-              className="py-2 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-600 rounded-xl text-xs font-bold transition text-center"
-            >
-              Clear
-            </button>
           </div>
         </div>
 
         {/* 2. Daily Interest Rate */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
               <Percent className="w-3.5 h-3.5 text-[#C5A059]" />
-              <span>{language === 'te' ? 'వడ్డీ రేటు (రోజుకు)' : 'Daily Interest Rate'}</span>
+              <span>{language === 'te' ? 'వడ్డీ రేటు (రోజుకు లక్షకు)' : 'Daily Interest Rate (per Lakh/Day)'}</span>
             </label>
             {customerRatePerLakh > 0 && (
               <span className="text-xs font-mono font-bold text-[#C5A059]">
@@ -404,86 +345,18 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
             )}
           </div>
 
-          {/* 1K+ Quick Add Buttons */}
-          <div className="space-y-1">
-            <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">
-              {language === 'te' ? 'వడ్డీ రేటు త్వరిత జోడింపు (1K+)' : '1K+ Quick Add (Interest Rate):'}
-            </span>
-            <div className="grid grid-cols-4 gap-1.5">
-              <button
-                type="button"
-                onClick={() => addRate(1000)}
-                className="py-2 bg-[#C5A059]/15 hover:bg-[#C5A059]/25 active:scale-95 text-[#9a7836] rounded-xl text-xs font-extrabold font-mono transition text-center shadow-2xs cursor-pointer"
-              >
-                +1,000
-              </button>
-              <button
-                type="button"
-                onClick={() => addRate(2000)}
-                className="py-2 bg-[#C5A059]/15 hover:bg-[#C5A059]/25 active:scale-95 text-[#9a7836] rounded-xl text-xs font-extrabold font-mono transition text-center shadow-2xs cursor-pointer"
-              >
-                +2,000
-              </button>
-              <button
-                type="button"
-                onClick={() => addRate(5000)}
-                className="py-2 bg-[#C5A059]/15 hover:bg-[#C5A059]/25 active:scale-95 text-[#9a7836] rounded-xl text-xs font-extrabold font-mono transition text-center shadow-2xs cursor-pointer"
-              >
-                +5,000
-              </button>
-              <button
-                type="button"
-                onClick={clearRate}
-                className="py-2 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-600 rounded-xl text-xs font-bold transition text-center cursor-pointer"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Rate Presets */}
-          <div className="grid grid-cols-4 gap-1.5">
-            {[
-              { rate: 100, label: '₹100' },
-              { rate: 120, label: '₹120' },
-              { rate: 150, label: '₹150' },
-              { rate: 1000, label: '₹1,000 (1K)' },
-            ].map((p) => (
-              <button
-                key={p.rate}
-                type="button"
-                onClick={() => {
-                  setCustomerRatePerLakh(p.rate);
-                  setCustomerRateStr(formatNumberWithCommas(p.rate));
-                }}
-                className={`py-1.5 px-1 rounded-xl text-[11px] font-bold transition border cursor-pointer ${
-                  customerRatePerLakh === p.rate
-                    ? 'bg-[#1E293B] text-[#C5A059] border-[#1E293B]'
-                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Custom Rate Input - Empty by default, no default numbers */}
-          <div>
-            <span className="text-[10px] text-slate-500 font-semibold block mb-1">
-              {language === 'te' ? 'లేదా మీరే రాయండి (₹1,00,000 కి రోజుకు ₹)' : 'Or Enter Custom Rate (₹ per ₹1,00,000 / Day)'}
-            </span>
-            <div className="relative">
-              <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">₹</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={customerRateStr}
-                onChange={(e) => handleRateInput(e.target.value)}
-                placeholder="Enter rate per Lakh (e.g. 1000)"
-                className="w-full pl-7 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold font-mono text-slate-900 focus:outline-none focus:border-[#C5A059] focus:bg-white"
-                required
-              />
-            </div>
+          {/* Clean Direct Rate Input */}
+          <div className="relative">
+            <span className="absolute left-3.5 top-2.5 text-lg font-bold text-slate-400">₹</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={customerRateStr}
+              onChange={(e) => handleRateInput(e.target.value)}
+              placeholder={language === 'te' ? 'లక్షకు రోజుకు రేటు (ఉదా: 1000 లేదా 500)' : 'Rate per ₹1,00,000 / Day (e.g. 1000 or 500)'}
+              className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-lg font-black font-mono text-slate-900 focus:outline-none focus:border-[#C5A059] focus:bg-white"
+              required
+            />
           </div>
         </div>
 

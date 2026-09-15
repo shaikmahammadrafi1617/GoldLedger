@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "cap:add": "cap add android",
     "cap:build": "npm run build && cap sync",
     "cap:sync": "cap sync",
     "cap:open": "cap open android"
