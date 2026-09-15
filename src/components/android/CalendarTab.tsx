@@ -234,44 +234,6 @@ export const CalendarTab: React.FC<CalendarTabProps> = ({
             {language === 'te' ? 'ఈ రోజు' : 'Today'}
           </button>
         </div>
-
-        {/* Fast Shortcut Pills: Today, Yesterday, 2 Days Ago, 3 Days Ago */}
-        <div className="pt-1">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">
-            {language === 'te' ? 'త్వరిత తేదీ ఎంపిక:' : 'Quick Date Jump:'}
-          </span>
-          <div className="grid grid-cols-4 gap-1.5">
-            {[
-              { labelEn: 'Today', labelTe: 'ఈ రోజు', date: todayStr },
-              { labelEn: 'Yesterday', labelTe: 'నిన్న', date: getPastDateString(1) },
-              { labelEn: '2 Days Ago', labelTe: '2 రోజుల క్రితం', date: getPastDateString(2) },
-              { labelEn: '3 Days Ago', labelTe: '3 రోజుల క్రితం', date: getPastDateString(3) },
-            ].map((shortcut) => {
-              const isSel = selectedDate === shortcut.date;
-              return (
-                <button
-                  key={shortcut.labelEn}
-                  type="button"
-                  onClick={() => {
-                    setSelectedDate(shortcut.date);
-                    const parts = shortcut.date.split('-').map(Number);
-                    setCurrentYear(parts[0]);
-                    setCurrentMonth(parts[1] - 1);
-                  }}
-                  className={`py-1.5 px-1 rounded-xl text-xs font-bold transition text-center border active:scale-95 cursor-pointer ${
-                    isSel 
-                      ? 'bg-[#1E293B] text-[#C5A059] border-[#1E293B] shadow-xs' 
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <span className="block truncate">
-                    {language === 'te' ? shortcut.labelTe : shortcut.labelEn}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
       </div>
 
       {/* Calendar Month Card */}

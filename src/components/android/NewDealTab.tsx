@@ -9,7 +9,12 @@ import {
   Clock,
   Calendar,
   AlertTriangle,
-  CalendarDays
+  CalendarDays,
+  Users,
+  UserCheck,
+  Briefcase,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Transaction, Agent, Investor, Language } from '../../types';
 import { 
@@ -19,7 +24,9 @@ import {
   formatDateReadable,
   getPastDateString,
   getRelativeDaysLabel,
-  calculateDurationDays
+  calculateDurationDays,
+  calculateCompoundDeal,
+  getDefaultGraceDays
 } from '../../utils/formatters';
 
 interface NewDealTabProps {
@@ -33,6 +40,8 @@ interface NewDealTabProps {
 
 export const NewDealTab: React.FC<NewDealTabProps> = ({
   onSaveTransaction,
+  agents = [],
+  investors = [],
   language,
   onViewActive,
   prefillData,
@@ -55,6 +64,40 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
   );
   const ratePeriod: 'per_day' = 'per_day';
 
+  // Agent & Commission
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(prefillData?.agentId || (agents[0]?.id || ''));
+  const [agentCommissionRatePerLakh, setAgentCommissionRatePerLakh] = useState<number>(
+    prefillData?.agentCommissionRatePerLakh !== undefined ? prefillData.agentCommissionRatePerLakh : 400
+  );
+  const [agentCommissionRateStr, setAgentCommissionRateStr] = useState<string>(
+    prefillData?.agentCommissionRatePerLakh !== undefined ? String(prefillData.agentCommissionRatePerLakh) : '400'
+  );
+
+  // Normal Days Before Compounding Starts (Default 2 for 10L, 5 for 5L)
+  const [graceDays, setGraceDays] = useState<number>(
+    prefillData?.graceDays !== undefined ? prefillData.graceDays : (principal >= 1000000 ? 2 : 5)
+  );
+
+  // Investor Financing (Optional Section)
+  const [showInvestorSection, setShowInvestorSection] = useState<boolean>(
+    !!(prefillData?.investors && prefillData.investors.length > 0)
+  );
+  const [selectedInvestorId, setSelectedInvestorId] = useState<string>(
+    prefillData?.investors?.[0]?.investorId || (investors[0]?.id || '')
+  );
+  const [investorAmount, setInvestorAmount] = useState<number>(
+    prefillData?.investors?.[0]?.amount || 0
+  );
+  const [investorAmountStr, setInvestorAmountStr] = useState<string>(
+    prefillData?.investors?.[0]?.amount ? formatNumberWithCommas(prefillData.investors[0].amount) : ''
+  );
+  const [investorRatePerLakh, setInvestorRatePerLakh] = useState<number>(
+    prefillData?.investors?.[0]?.ratePerLakh || 1000
+  );
+  const [investorRateStr, setInvestorRateStr] = useState<string>(
+    prefillData?.investors?.[0]?.ratePerLakh ? formatNumberWithCommas(prefillData.investors[0].ratePerLakh) : '1,000'
+  );
+
   // React to prefillData changes (e.g. user clicked "+ Enter Deal for Date" in Calendar)
   useEffect(() => {
     if (prefillData?.givenDate) {
@@ -63,10 +106,18 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
     if (prefillData?.principal !== undefined && prefillData.principal > 0) {
       setPrincipal(prefillData.principal);
       setPrincipalStr(formatNumberWithCommas(prefillData.principal));
+      if (prefillData.principal >= 1000000) setGraceDays(2);
+      else if (prefillData.principal <= 500000) setGraceDays(5);
     }
     if (prefillData?.customerRatePerLakh !== undefined && prefillData.customerRatePerLakh > 0) {
       setCustomerRatePerLakh(prefillData.customerRatePerLakh);
       setCustomerRateStr(formatNumberWithCommas(prefillData.customerRatePerLakh));
+    }
+    if (prefillData?.agentId) {
+      setSelectedAgentId(prefillData.agentId);
+    }
+    if (prefillData?.graceDays !== undefined) {
+      setGraceDays(prefillData.graceDays);
     }
   }, [prefillData]);
 
@@ -79,6 +130,12 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
     const num = rawDigits ? parseInt(rawDigits, 10) : 0;
     setPrincipal(num);
     setPrincipalStr(num > 0 ? formatNumberWithCommas(num) : '');
+    // Auto-adjust default grace days according to business rule
+    if (num >= 1000000) {
+      setGraceDays(2);
+    } else if (num > 0 && num <= 500000) {
+      setGraceDays(5);
+    }
   };
 
   // Handle rate input
@@ -87,6 +144,30 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
     const num = rawDigits ? parseInt(rawDigits, 10) : 0;
     setCustomerRatePerLakh(num);
     setCustomerRateStr(num > 0 ? formatNumberWithCommas(num) : '');
+  };
+
+  // Handle agent commission input
+  const handleAgentCommInput = (value: string) => {
+    const rawDigits = value.replace(/\D/g, '');
+    const num = rawDigits ? parseInt(rawDigits, 10) : 0;
+    setAgentCommissionRatePerLakh(num);
+    setAgentCommissionRateStr(num > 0 ? formatNumberWithCommas(num) : '');
+  };
+
+  // Handle investor amount input
+  const handleInvestorAmountInput = (value: string) => {
+    const rawDigits = value.replace(/\D/g, '');
+    const num = rawDigits ? parseInt(rawDigits, 10) : 0;
+    setInvestorAmount(num);
+    setInvestorAmountStr(num > 0 ? formatNumberWithCommas(num) : '');
+  };
+
+  // Handle investor rate input
+  const handleInvestorRateInput = (value: string) => {
+    const rawDigits = value.replace(/\D/g, '');
+    const num = rawDigits ? parseInt(rawDigits, 10) : 0;
+    setInvestorRatePerLakh(num);
+    setInvestorRateStr(num > 0 ? formatNumberWithCommas(num) : '');
   };
 
   // Calculations per day
@@ -99,9 +180,7 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
         accruedInterestSoFar: 0,
         totalCollectionDueToday: principal,
         isPastDeal: dealDate < getTodayDateString(),
-        day1Total: principal,
-        day2Total: principal,
-        day3Total: principal,
+        dealCalc: null,
         hasValues: false,
       };
     }
@@ -109,8 +188,27 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
     const units = principal / 100000;
     const dailyInterest = Math.round(units * customerRatePerLakh);
     const elapsedDays = calculateDurationDays(dealDate);
-    const accruedInterestSoFar = Math.round(units * customerRatePerLakh * elapsedDays);
-    const totalCollectionDueToday = principal + accruedInterestSoFar;
+    
+    const invList = (showInvestorSection && investorAmount > 0) ? [{
+      investorId: selectedInvestorId || 'inv-1',
+      investorName: investors.find(i => i.id === selectedInvestorId)?.name || 'Investor',
+      amount: investorAmount,
+      ratePerLakh: investorRatePerLakh,
+    }] : [];
+
+    const dealCalc = calculateCompoundDeal({
+      principal,
+      ratePerLakh: customerRatePerLakh,
+      agentCommissionRatePerLakh,
+      durationDays: Math.max(elapsedDays, 4),
+      graceDays,
+      investors: invList,
+    });
+
+    const activeIdx = Math.min(elapsedDays, dealCalc.dailyBreakdown.length) - 1;
+    const activeDayInfo = dealCalc.dailyBreakdown[activeIdx] || dealCalc.dailyBreakdown[0];
+    const totalCollectionDueToday = activeDayInfo?.closingBalance || (principal + dailyInterest * elapsedDays);
+    const accruedInterestSoFar = totalCollectionDueToday - principal;
 
     return {
       units,
@@ -119,12 +217,10 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
       accruedInterestSoFar,
       totalCollectionDueToday,
       isPastDeal: dealDate < getTodayDateString(),
-      day1Total: principal + dailyInterest,
-      day2Total: principal + dailyInterest * 2,
-      day3Total: principal + dailyInterest * 3,
+      dealCalc,
       hasValues: true,
     };
-  }, [principal, customerRatePerLakh, dealDate]);
+  }, [principal, customerRatePerLakh, agentCommissionRatePerLakh, dealDate, graceDays, showInvestorSection, investorAmount, investorRatePerLakh, selectedInvestorId, investors]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,23 +233,33 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
       return;
     }
 
-    const dealLabel = `Deal ₹${formatNumberWithCommas(principal)}`;
+    const agentObj = agents.find(a => a.id === selectedAgentId);
+    const dealLabel = agentObj ? `${agentObj.name} - ₹${formatNumberWithCommas(principal)}` : `Deal ₹${formatNumberWithCommas(principal)}`;
+
+    const invList = (showInvestorSection && investorAmount > 0) ? [{
+      investorId: selectedInvestorId || 'inv-1',
+      investorName: investors.find(i => i.id === selectedInvestorId)?.name || 'Investor',
+      amount: investorAmount,
+      ratePerLakh: investorRatePerLakh,
+      settled: false,
+    }] : [];
 
     const newTx: Partial<Transaction> = {
       customerName: dealLabel,
-      customerPhone: '',
+      customerPhone: agentObj?.phone || '',
       releaseBank: '',
       targetBank: '',
-      agentId: '',
-      agentName: '',
+      agentId: selectedAgentId,
+      agentName: agentObj?.name || '',
       principal,
       givenDate: dealDate,
       customerRatePerLakh,
       ratePeriod,
+      graceDays,
       status: 'active',
-      enableProfitSharing: false,
-      agentCommissionRatePerLakh: 0,
-      investors: [],
+      enableProfitSharing: agentCommissionRatePerLakh > 0 || invList.length > 0,
+      agentCommissionRatePerLakh,
+      investors: invList,
       notes: '',
     };
 
@@ -353,34 +459,289 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
               inputMode="numeric"
               value={customerRateStr}
               onChange={(e) => handleRateInput(e.target.value)}
-              placeholder={language === 'te' ? 'లక్షకు రోజుకు రేటు (ఉదా: 1000 లేదా 500)' : 'Rate per ₹1,00,000 / Day (e.g. 1000 or 500)'}
+              placeholder={language === 'te' ? 'లక్షకు రోజుకు రేటు (ఉదా: 2000 లేదా 1500)' : 'Rate per ₹1,00,000 / Day (e.g. 2000 or 1500)'}
               className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-lg font-black font-mono text-slate-900 focus:outline-none focus:border-[#C5A059] focus:bg-white"
               required
             />
           </div>
         </div>
 
-        {/* Live Earnings Calculation */}
-        <div className="bg-[#1E293B] border-2 border-[#C5A059] rounded-2xl p-4 text-white shadow-lg space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#C5A059] flex items-center gap-1.5">
-              <Coins className="w-4 h-4" />
-              <span>{language === 'te' ? 'రోజువారీ సంపాదన' : 'Daily Interest Earning'}</span>
-            </span>
-            {calculated.hasValues && (
-              <span className="text-xs font-mono text-slate-400 flex items-center gap-1">
-                <Clock className="w-3 h-3 text-[#C5A059]" />
-                <span>Runs until day of settlement</span>
+        {/* 3. Agent & Agent Commission */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-[#C5A059]" />
+              <span>{language === 'te' ? 'ఏజెంట్ & కమీషన్' : 'Agent & Commission'}</span>
+            </label>
+            {agentCommissionRatePerLakh > 0 && (
+              <span className="text-xs font-mono font-bold text-slate-600">
+                ₹{formatNumberWithCommas(agentCommissionRatePerLakh)} / 1L / day
               </span>
             )}
           </div>
 
-          {calculated.hasValues ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {/* Agent Select */}
+            <div>
+              <span className="text-[10px] text-slate-500 font-bold block mb-1">
+                {language === 'te' ? 'డబ్బు తీసుకున్న ఏజెంట్' : 'Agent Taking Money'}
+              </span>
+              {agents.length > 0 ? (
+                <select
+                  value={selectedAgentId}
+                  onChange={(e) => setSelectedAgentId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[#C5A059] focus:bg-white cursor-pointer"
+                >
+                  <option value="">{language === 'te' ? '-- ఏజెంట్ ఎంచుకోండి --' : '-- Select Agent --'}</option>
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} {a.phone ? `(${a.phone})` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder={language === 'te' ? 'ఏజెంట్ పేరు' : 'Agent Name'}
+                  value={selectedAgentId}
+                  onChange={(e) => setSelectedAgentId(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                />
+              )}
+            </div>
+
+            {/* Agent Commission Rate per Lakh */}
+            <div>
+              <span className="text-[10px] text-slate-500 font-bold block mb-1">
+                {language === 'te' ? 'ఏజెంట్ కమీషన్ (లక్షకు/రోజుకు)' : 'Agent Commission Rate (/1L/day)'}
+              </span>
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">₹</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={agentCommissionRateStr}
+                  onChange={(e) => handleAgentCommInput(e.target.value)}
+                  placeholder="400"
+                  className="w-full pl-6 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black font-mono text-slate-900 focus:outline-none focus:border-[#C5A059] focus:bg-white"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Normal Days Before Compounding (Grace Days) */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-[#C5A059]" />
+              <span>{language === 'te' ? 'సాధారణ వడ్డీ రోజులు (చక్రవడ్డీ మొదలయ్యే ముందు)' : 'Normal Days (Before Compounding Starts)'}</span>
+            </label>
+            <span className="text-xs font-mono font-bold text-[#C5A059]">
+              {graceDays === 0 
+                ? (language === 'te' ? 'ప్రతిరోజూ చక్రవడ్డీ' : 'Compounding Every Day')
+                : `${graceDays} ${language === 'te' ? 'రోజులు' : 'Days'}`}
+            </span>
+          </div>
+
+          <p className="text-[11px] text-slate-500">
+            {language === 'te'
+              ? `ఈ ${graceDays} రోజుల వరకు సాధారణ వడ్డీ మాత్రమే పడుతుంది. ${graceDays + 1}వ రోజు నుండి చక్రవడ్డీ మొదలవుతుంది.`
+              : `Flat interest for first ${graceDays} days. On Day ${graceDays + 1}, previous balance becomes new principal (compounding).`}
+          </p>
+
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            <button
+              type="button"
+              onClick={() => setGraceDays(2)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${
+                graceDays === 2 
+                  ? 'bg-[#1E293B] text-white border-[#1E293B] shadow-xs' 
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              2 {language === 'te' ? 'రోజులు (10L డిఫాల్ట్)' : 'Days (10L Default)'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setGraceDays(5)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${
+                graceDays === 5 
+                  ? 'bg-[#1E293B] text-white border-[#1E293B] shadow-xs' 
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              5 {language === 'te' ? 'రోజులు (5L డిఫాల్ట్)' : 'Days (5L Default)'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setGraceDays(6)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${
+                graceDays === 6 
+                  ? 'bg-[#1E293B] text-white border-[#1E293B] shadow-xs' 
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              6 {language === 'te' ? 'రోజులు (ఏజెంట్ వాగ్దానం)' : 'Days (Agent Promise)'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setGraceDays(7)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${
+                graceDays === 7 
+                  ? 'bg-[#1E293B] text-white border-[#1E293B] shadow-xs' 
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              7 {language === 'te' ? 'రోజులు (1 వారం)' : 'Days (1 Week)'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setGraceDays(3)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${
+                graceDays === 3 
+                  ? 'bg-[#1E293B] text-white border-[#1E293B] shadow-xs' 
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              3 Days
+            </button>
+            <button
+              type="button"
+              onClick={() => setGraceDays(1)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${
+                graceDays === 1 
+                  ? 'bg-[#1E293B] text-white border-[#1E293B] shadow-xs' 
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              1 Day
+            </button>
+            <button
+              type="button"
+              onClick={() => setGraceDays(0)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${
+                graceDays === 0 
+                  ? 'bg-[#1E293B] text-white border-[#1E293B] shadow-xs' 
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              0 (Everyday Compound)
+            </button>
+          </div>
+        </div>
+
+        {/* 5. Optional Investor Financing Collapsible */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setShowInvestorSection(!showInvestorSection)}
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wider cursor-pointer"
+            >
+              <Briefcase className="w-3.5 h-3.5 text-[#C5A059]" />
+              <span>{language === 'te' ? 'ఇన్వెస్టర్ డబ్బుతో నడుస్తుందా? (ఐచ్ఛికం)' : 'Financed by Investor? (Optional)'}</span>
+              {showInvestorSection ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+            </button>
+            {showInvestorSection && investorAmount > 0 && (
+              <span className="text-xs font-mono font-bold text-emerald-700">
+                {formatINR(investorAmount)} @ ₹{investorRatePerLakh}/1L
+              </span>
+            )}
+          </div>
+
+          {showInvestorSection && (
+            <div className="pt-2 border-t border-slate-100 space-y-2.5">
+              <p className="text-[11px] text-slate-500">
+                {language === 'te' 
+                  ? 'ఇన్వెస్టర్ల కమీషన్ సరళంగా రోజుకు ₹1k/లక్ష చొప్పున లెక్కించబడుతుంది.' 
+                  : 'Investor share is simpler: daily linear interest (e.g. ₹1,000 per 1 Lakh/day) for days used.'}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <span className="text-[10px] text-slate-500 font-bold block mb-1">
+                    {language === 'te' ? 'ఇన్వెస్టర్' : 'Investor'}
+                  </span>
+                  {investors.length > 0 ? (
+                    <select
+                      value={selectedInvestorId}
+                      onChange={(e) => setSelectedInvestorId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[#C5A059]"
+                    >
+                      {investors.map((inv) => (
+                        <option key={inv.id} value={inv.id}>{inv.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Investor Name"
+                      value={selectedInvestorId}
+                      onChange={(e) => setSelectedInvestorId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-slate-500 font-bold block mb-1">
+                    {language === 'te' ? 'ఇన్వెస్టర్ ఇచ్చిన అసలు' : 'Investor Amount'}
+                  </span>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1.5 text-xs font-bold text-slate-400">₹</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={investorAmountStr}
+                      onChange={(e) => handleInvestorAmountInput(e.target.value)}
+                      placeholder="e.g. 5,00,000"
+                      className="w-full pl-6 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black font-mono text-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-slate-500 font-bold block mb-1">
+                    {language === 'te' ? 'రేటు (లక్షకు/రోజుకు)' : 'Rate (/1L/day)'}
+                  </span>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1.5 text-xs font-bold text-slate-400">₹</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={investorRateStr}
+                      onChange={(e) => handleInvestorRateInput(e.target.value)}
+                      placeholder="1000"
+                      className="w-full pl-6 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black font-mono text-slate-900"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Live Earnings & Compounding Timeline Calculation */}
+        <div className="bg-[#1E293B] border-2 border-[#C5A059] rounded-2xl p-4 text-white shadow-lg space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#C5A059] flex items-center gap-1.5">
+              <Coins className="w-4 h-4" />
+              <span>{language === 'te' ? 'రోజువారీ లెక్క & చక్రవడ్డీ వివరాలు' : 'Daily Calculations & Compounding'}</span>
+            </span>
+            {calculated.hasValues && (
+              <span className="text-xs font-mono text-slate-400 flex items-center gap-1">
+                <Clock className="w-3 h-3 text-[#C5A059]" />
+                <span>{graceDays} Days Normal Rate</span>
+              </span>
+            )}
+          </div>
+
+          {calculated.hasValues && calculated.dealCalc ? (
             <div className="space-y-3">
               <div className="flex items-baseline justify-between">
                 <div>
                   <span className="text-[11px] text-slate-400 block">
-                    {language === 'te' ? 'ప్రతి రోజు మీకు వచ్చే వడ్డీ' : 'Your Profit Every Single Day'}
+                    {language === 'te' ? 'మొదటి రోజు వడ్డీ' : 'Day 1 Starting Daily Interest'}
                   </span>
                   <span className="text-2xl font-black font-mono text-emerald-400">
                     +{formatINR(calculated.dailyInterest)}
@@ -397,48 +758,67 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
                 </div>
               </div>
 
-              {/* Day-by-Day Running Collection Preview */}
-              <div className="pt-2 border-t border-slate-800">
-                {calculated.isPastDeal ? (
-                  <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-2.5 space-y-1.5">
-                    <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-amber-400" />
-                      <span>{language === 'te' ? 'గత తేదీ లెక్క స్థితి (ఈ రోజు వరకు):' : 'Past Deal Status to Today:'}</span>
-                    </span>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">{language === 'te' ? 'నడిచిన రోజులు' : 'Elapsed Days'}</span>
-                        <span className="font-extrabold text-[#C5A059] font-mono">{calculated.elapsedDays} Days</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">{language === 'te' ? 'ఇప్పటివరకు వడ్డీ' : 'Accrued Interest'}</span>
-                        <span className="font-extrabold text-emerald-400 font-mono">+{formatINR(calculated.accruedInterestSoFar)}</span>
-                      </div>
+              {/* Day-by-Day Compounding Projection Table */}
+              <div className="pt-2 border-t border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3 text-[#C5A059]" />
+                    <span>{language === 'te' ? 'రోజువారీ తిరిగి ఇవ్వాల్సిన మొత్తం & ఏజెంట్ కమీషన్:' : 'Day-by-Day Return Schedule & Commission:'}</span>
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px] font-mono">
+                    <thead>
+                      <tr className="text-slate-400 border-b border-slate-800 text-[10px] uppercase font-sans">
+                        <th className="text-left pb-1">{language === 'te' ? 'రోజు' : 'Day'}</th>
+                        <th className="text-right pb-1">{language === 'te' ? 'తిరిగి ఇవ్వాల్సిన మొత్తం' : 'Total to Return'}</th>
+                        <th className="text-right pb-1">{language === 'te' ? 'వడ్డీ' : 'Interest'}</th>
+                        <th className="text-right pb-1">{language === 'te' ? 'ఏజెంట్ కమీషన్' : 'Agent Comm'}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80">
+                      {calculated.dealCalc.dailyBreakdown.slice(0, 4).map((b) => (
+                        <tr key={b.day} className="hover:bg-slate-800/40">
+                          <td className="py-1.5 text-left text-slate-300">
+                            <div className="flex items-center gap-1">
+                              <span>Day {b.day}</span>
+                              {b.isCompounded && (
+                                <span className="text-[9px] font-sans px-1 py-0.2 rounded bg-purple-900/80 text-purple-300 font-bold">
+                                  {language === 'te' ? 'చక్రవడ్డీ' : 'Compounded'}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-1.5 text-right font-black text-amber-300">
+                            {formatINR(b.closingBalance)}
+                          </td>
+                          <td className="py-1.5 text-right text-emerald-400 font-bold">
+                            +{formatINR(b.interestAdded)}
+                          </td>
+                          <td className="py-1.5 text-right text-slate-300">
+                            {formatINR(b.cumulativeAgentCommission)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* If Investor enabled: Show net profit breakdown */}
+                {showInvestorSection && investorAmount > 0 && (
+                  <div className="bg-slate-800/80 rounded-xl p-2.5 border border-slate-700 text-xs space-y-1">
+                    <div className="flex justify-between text-slate-300">
+                      <span>{language === 'te' ? 'ఇన్వెస్టర్ వాటా (రోజుకు):' : 'Investor Share (/day):'}</span>
+                      <span className="font-mono text-amber-300">
+                        {formatINR(Math.round((investorAmount / 100000) * investorRatePerLakh))}
+                      </span>
                     </div>
-                    <div className="pt-1 border-t border-amber-500/30 flex justify-between items-center text-xs">
-                      <span className="text-slate-300 font-semibold">{language === 'te' ? 'ఈ రోజే క్లోజ్ చేస్తే మొత్తం:' : 'Total if Settled Today:'}</span>
-                      <span className="font-black text-amber-300 font-mono text-sm">{formatINR(calculated.totalCollectionDueToday)}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <span className="text-[10px] font-semibold text-slate-400 block mb-1.5 flex items-center gap-1">
-                      <TrendingUp className="w-3 h-3 text-[#C5A059]" />
-                      <span>Total Collection Due by Day:</span>
-                    </span>
-                    <div className="grid grid-cols-3 gap-1.5 text-center">
-                      <div className="bg-slate-800/80 p-1.5 rounded-lg border border-slate-700">
-                        <span className="text-[9px] text-slate-400 block">If 1 Day</span>
-                        <span className="text-[11px] font-bold font-mono text-white">{formatINR(calculated.day1Total)}</span>
-                      </div>
-                      <div className="bg-slate-800/80 p-1.5 rounded-lg border border-slate-700">
-                        <span className="text-[9px] text-slate-400 block">If 2 Days</span>
-                        <span className="text-[11px] font-bold font-mono text-white">{formatINR(calculated.day2Total)}</span>
-                      </div>
-                      <div className="bg-slate-800/80 p-1.5 rounded-lg border border-slate-700">
-                        <span className="text-[9px] text-slate-400 block">If 3 Days</span>
-                        <span className="text-[11px] font-bold font-mono text-white">{formatINR(calculated.day3Total)}</span>
-                      </div>
+                    <div className="flex justify-between text-emerald-400 font-bold pt-1 border-t border-slate-700">
+                      <span>{language === 'te' ? 'ఓనర్ నికర లాభం (మొదటి రోజు):' : 'Owner Net Profit (Day 1):'}</span>
+                      <span className="font-mono">
+                        {formatINR(calculated.dailyInterest - Math.round((principal / 100000) * agentCommissionRatePerLakh) - Math.round((investorAmount / 100000) * investorRatePerLakh))}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -447,8 +827,8 @@ export const NewDealTab: React.FC<NewDealTabProps> = ({
           ) : (
             <div className="py-2 text-center text-xs text-slate-400">
               {language === 'te' 
-                ? 'అసలు మొత్తం & వడ్డీ నమోదు చేయండి — రోజువారీ లాభం ఇక్కడ కనిపిస్తుంది'
-                : 'Enter principal amount & interest rate to see daily profit'}
+                ? 'అసలు మొత్తం & వడ్డీ నమోదు చేయండి — రోజువారీ లాభం & చక్రవడ్డీ ఇక్కడ కనిపిస్తుంది'
+                : 'Enter principal amount & interest rate to see day-by-day compounding'}
             </div>
           )}
         </div>

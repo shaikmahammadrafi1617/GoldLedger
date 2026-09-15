@@ -11,7 +11,7 @@ import {
   Unsubscribe 
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { Transaction, Agent, Investor, ActivityLog, OwnerSettings } from '../types';
+import { Transaction, Agent, Investor, ActivityLog, OwnerSettings, AgentKhataEntry } from '../types';
 
 function isOfflineOrUnavailable(error: unknown): boolean {
   if (!error) return false;
@@ -34,9 +34,31 @@ export function subscribeToUserData(
     onInvestors: (investors: Investor[]) => void;
     onLogs: (logs: ActivityLog[]) => void;
     onSettings: (settings: OwnerSettings | null) => void;
+    onKhata?: (entries: AgentKhataEntry[]) => void;
   }
 ): () => void {
   const unsubs: Unsubscribe[] = [];
+
+  // Khata Listener
+  if (callbacks.onKhata) {
+    const khataColPath = `users/${userId}/khata`;
+    const unsubKhata = onSnapshot(
+      collection(db, khataColPath),
+      (snapshot) => {
+        const items: AgentKhataEntry[] = [];
+        snapshot.forEach((d) => items.push(d.data() as AgentKhataEntry));
+        callbacks.onKhata?.(items);
+      },
+      (error) => {
+        if (isOfflineOrUnavailable(error)) {
+          console.warn(`Firestore operating offline for ${khataColPath}`);
+          return;
+        }
+        handleFirestoreError(error, OperationType.LIST, khataColPath);
+      }
+    );
+    unsubs.push(unsubKhata);
+  }
 
   // Transactions Listener
   const txColPath = `users/${userId}/transactions`;
@@ -211,6 +233,19 @@ export async function saveAgentToFirestore(userId: string, agent: Agent): Promis
   }
 }
 
+export async function deleteAgentFromFirestore(userId: string, agentId: string): Promise<void> {
+  const docPath = `users/${userId}/agents/${agentId}`;
+  try {
+    await deleteDoc(doc(db, docPath));
+  } catch (error) {
+    if (isOfflineOrUnavailable(error)) {
+      console.warn(`Firestore operating offline for ${docPath}`);
+      return;
+    }
+    handleFirestoreError(error, OperationType.DELETE, docPath);
+  }
+}
+
 export async function saveInvestorToFirestore(userId: string, investor: Investor): Promise<void> {
   const docPath = `users/${userId}/investors/${investor.id}`;
   try {
@@ -263,8 +298,38 @@ export async function saveSettingsToFirestore(userId: string, settings: OwnerSet
   }
 }
 
+export async function saveKhataEntryToFirestore(userId: string, entry: AgentKhataEntry): Promise<void> {
+  const docPath = `users/${userId}/khata/${entry.id}`;
+  try {
+    const payload = sanitizeForFirestore({
+      ...entry,
+      userId,
+    });
+    await setDoc(doc(db, docPath), payload, { merge: true });
+  } catch (error) {
+    if (isOfflineOrUnavailable(error)) {
+      console.warn(`Firestore operating offline for ${docPath}`);
+      return;
+    }
+    handleFirestoreError(error, OperationType.WRITE, docPath);
+  }
+}
+
+export async function deleteKhataEntryFromFirestore(userId: string, entryId: string): Promise<void> {
+  const docPath = `users/${userId}/khata/${entryId}`;
+  try {
+    await deleteDoc(doc(db, docPath));
+  } catch (error) {
+    if (isOfflineOrUnavailable(error)) {
+      console.warn(`Firestore operating offline for ${docPath}`);
+      return;
+    }
+    handleFirestoreError(error, OperationType.DELETE, docPath);
+  }
+}
+
 export async function clearAllUserDataFromFirestore(userId: string): Promise<void> {
-  const collectionsToClear = ['transactions', 'agents', 'investors', 'logs'];
+  const collectionsToClear = ['transactions', 'agents', 'investors', 'logs', 'khata'];
   for (const colName of collectionsToClear) {
     const colPath = `users/${userId}/${colName}`;
     try {

@@ -95,9 +95,37 @@
         "language": { "type": "string", "enum": ["en", "te"] }
       },
       "required": ["id", "userId"]
+    },
+    "AgentKhataEntry": {
+      "title": "AgentKhataEntry",
+      "description": "Running khata ledger entry for agent deals, daily interest, compounding rollovers, and cash settlements.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "agentId": { "type": "string", "maxLength": 128 },
+        "agentName": { "type": "string", "maxLength": 100 },
+        "date": { "type": "string", "maxLength": 30 },
+        "type": { "type": "string", "enum": ["give_cash", "rollover_compound", "received_payment", "settle_deal"] },
+        "principalGiven": { "type": "number" },
+        "ratePerLakh": { "type": "number" },
+        "days": { "type": "number" },
+        "interestAmount": { "type": "number" },
+        "receivedAmount": { "type": "number" },
+        "previousBalance": { "type": "number" },
+        "newBalance": { "type": "number" },
+        "formulaText": { "type": "string", "maxLength": 500 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "userId", "agentId", "type", "date"]
     }
   },
   "firestore": {
+    "/users/{userId}/khata/{entryId}": {
+      "schema": "AgentKhataEntry",
+      "description": "Agent running khata entries."
+    },
     "/users/{userId}/transactions/{transactionId}": {
       "schema": "Transaction",
       "description": "Transactions owned and accessed only by the user."

@@ -23,6 +23,7 @@ export interface Transaction {
   returnDate?: string; // YYYY-MM-DD (recorded only when money received)
   customerRatePerLakh: number; // e.g. 2000 per 1 Lakh per day
   ratePeriod: 'per_day' | 'per_month' | 'per_year';
+  graceDays?: number; // Days before daily compounding starts (e.g. 2 for 10L, 5 for 5L)
   status: TransactionStatus;
   notes?: string;
   
@@ -73,6 +74,29 @@ export interface ActivityLog {
   transactionId?: string;
   customerOrAgent?: string;
   details: string;
+}
+
+export interface AgentKhataEntry {
+  id: string;
+  userId?: string;
+  agentId: string;
+  agentName: string;
+  date: string; // YYYY-MM-DD
+  type: 'give_cash' | 'rollover_compound' | 'received_payment' | 'settle_deal';
+  principalGiven?: number;
+  ratePerLakh?: number; // e.g. 2000 per 1L per day
+  days?: number; // e.g. 1, 2, 3, 4 days
+  graceDays?: number; // Days before daily compounding starts (e.g. 2 for 10L, 5 for 5L)
+  enableCompounding?: boolean; // Whether daily compounding is enabled (default: false - simple flat daily interest)
+  compoundAfterDays?: number; // Days after which compounding begins if enabled (e.g. 2, 5, 7)
+  agentCommissionRatePerLakh?: number; // e.g. 400 per 1L
+  interestAmount?: number;
+  receivedAmount?: number;
+  previousBalance: number;
+  newBalance: number;
+  formulaText?: string;
+  notes?: string;
+  createdAt: string;
 }
 
 export type Language = 'en' | 'te';

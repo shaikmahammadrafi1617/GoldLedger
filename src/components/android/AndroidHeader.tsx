@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Calculator, 
+  Calendar as CalendarIcon,
   Lock, 
   Download, 
   Languages, 
@@ -20,6 +21,7 @@ interface AndroidHeaderProps {
   language: Language;
   onLanguageChange: (lang: Language) => void;
   onOpenCalculator: () => void;
+  onOpenCalendar?: () => void;
   onOpenBackup: () => void;
   onLockApp: () => void;
   isInstallable: boolean;
@@ -35,6 +37,7 @@ export const AndroidHeader: React.FC<AndroidHeaderProps> = ({
   language,
   onLanguageChange,
   onOpenCalculator,
+  onOpenCalendar,
   onOpenBackup,
   onLockApp,
   isInstallable,
@@ -99,6 +102,18 @@ export const AndroidHeader: React.FC<AndroidHeaderProps> = ({
           >
             <Download className="w-3 h-3" />
             <span>Install</span>
+          </button>
+        )}
+
+        {/* Quick Calendar Button */}
+        {onOpenCalendar && (
+          <button
+            type="button"
+            onClick={onOpenCalendar}
+            title={language === 'te' ? 'క్యాలెండర్' : 'Calendar'}
+            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer"
+          >
+            <CalendarIcon className="w-4 h-4 text-[#C5A059]" />
           </button>
         )}
 

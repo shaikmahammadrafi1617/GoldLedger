@@ -1,10 +1,11 @@
 import React from 'react';
 import { 
+  Wallet,
   PlusCircle, 
   Clock, 
+  Calendar,
   HandCoins, 
-  CheckCheck,
-  CalendarDays
+  CheckCheck
 } from 'lucide-react';
 import { Language } from '../../types';
 
@@ -23,9 +24,15 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
 }) => {
   const tabs = [
     {
+      id: 'khata',
+      labelEn: 'Khata',
+      labelTe: 'ఖాతా',
+      icon: Wallet,
+    },
+    {
       id: 'new-deal',
       labelEn: 'New Deal',
-      labelTe: 'కొత్త లెక్క',
+      labelTe: 'కొత్తది',
       icon: PlusCircle,
     },
     {
@@ -39,7 +46,7 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
       id: 'calendar',
       labelEn: 'Calendar',
       labelTe: 'క్యాలెండర్',
-      icon: CalendarDays,
+      icon: Calendar,
     },
     {
       id: 'settle',
@@ -49,7 +56,7 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
     },
     {
       id: 'day-done',
-      labelEn: 'Day Done',
+      labelEn: 'Done',
       labelTe: 'ముగిసినవి',
       icon: CheckCheck,
     },

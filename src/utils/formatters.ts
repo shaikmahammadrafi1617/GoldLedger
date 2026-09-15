@@ -55,9 +55,10 @@ export function formatCompactINR(amount: number): string {
 /**
  * Calculate duration in days between given date and return date (or today if active).
  * In day-based gold loan finance:
- * Same-day return = 1 day
- * Next-day return (e.g. Sep 1 to Sep 2) = 2 days
- * Sep 1 to Sep 3 = 3 days
+ * The give day is active and counted:
+ * Same-day return (e.g. Sep 13 to Sep 13) = 1 day
+ * Next-day return (e.g. Sep 13 to Sep 14) = 2 days
+ * Sep 13 to Sep 15 = 3 days
  */
 export function calculateDurationDays(givenDateStr: string, returnDateStr?: string): number {
   if (!givenDateStr) return 1;
@@ -73,7 +74,7 @@ export function calculateDurationDays(givenDateStr: string, returnDateStr?: stri
   const diffMs = endMidnight - startMidnight;
   const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
   
-  // Inclusive day counting: day 1 to day 1 is 1 day. Day 1 to day 3 is 3 days.
+  // Give day is active and counted: diffDays + 1 (e.g. Sep 13 to Sep 15 is 3 days).
   return Math.max(1, diffDays + 1);
 }
 
@@ -108,7 +109,9 @@ export interface FinancialBreakdown {
   totalAmountExpected: number;
   agentCommission: number;
   investorTotalShare: number;
+  totalInvestorShare?: number; // alias so activeCompoundInfo.totalInvestorShare always works
   ownerNetProfit: number;
+  dailyBreakdown?: DayBreakdown[];
   investorBreakdowns: {
     investorId: string;
     investorName: string;
@@ -120,6 +123,182 @@ export interface FinancialBreakdown {
   }[];
 }
 
+export interface DayBreakdown {
+  day: number;
+  openingPrincipal: number;
+  interestAdded: number;
+  closingBalance: number;
+  agentCommission: number;
+  cumulativeAgentCommission: number;
+  isCompounded: boolean;
+  investorDailyShare?: number;
+  cumulativeInvestorShare?: number;
+  ownerDayNetProfit?: number;
+}
+
+export interface CompoundFinancialBreakdown extends FinancialBreakdown {
+  ratePerLakh: number;
+  agentCommissionRatePerLakh: number;
+  graceDays: number;
+  enableCompounding?: boolean;
+  compoundAfterDays?: number;
+  dailyBreakdown: DayBreakdown[];
+  totalInterestAccrued: number;
+}
+
+/**
+ * Default grace/flat simple days before daily compounding starts:
+ * - For ₹10L or higher: 2 days
+ * - For ₹5L or lower: 5 days
+ * - In-between: 3 days
+ */
+export function getDefaultGraceDays(principal: number): number {
+  if (principal >= 1000000) return 2;
+  if (principal <= 500000) return 5;
+  return 3;
+}
+
+/**
+ * Compounding Calculation for Agent Deals & Gold Loan BT:
+ * - Day 1 interest is added immediately upon taking money.
+ * - Flat daily interest for grace days (e.g. 2 days for 10L, 5 days for 5L).
+ * - On day 3+ (after grace days), previous closing balance becomes the new principal basis.
+ * - Agent commission is also calculated on this compounded principal basis.
+ * - Investor commission is simpler: simple daily linear interest on contributed capital.
+ * - Owner Net Profit = Gross Interest - Agent Commission - Investor Share.
+ */
+export function calculateCompoundDeal({
+  principal,
+  ratePerLakh,
+  agentCommissionRatePerLakh = 0,
+  durationDays = 1,
+  graceDays = 2,
+  enableCompounding = false,
+  compoundAfterDays,
+  investors = [],
+}: {
+  principal: number;
+  ratePerLakh: number;
+  agentCommissionRatePerLakh?: number;
+  durationDays?: number;
+  graceDays?: number;
+  enableCompounding?: boolean;
+  compoundAfterDays?: number;
+  investors?: {
+    investorId: string;
+    investorName: string;
+    amount: number;
+    ratePerLakh: number;
+    settled?: boolean;
+  }[];
+}): CompoundFinancialBreakdown {
+  const dCount = Math.max(1, durationDays);
+  const compAfter = compoundAfterDays !== undefined ? compoundAfterDays : (graceDays ?? 2);
+  const dailyBreakdown: DayBreakdown[] = [];
+
+  let runningClosing = principal;
+  let cumulativeAgentComm = 0;
+
+  for (let day = 1; day <= dCount; day++) {
+    let basisPrincipal = principal;
+    let isCompounded = false;
+
+    if (!enableCompounding) {
+      // Simple Flat daily rate for all days (no compounding)
+      basisPrincipal = principal;
+      isCompounded = false;
+    } else {
+      // Compounding enabled: flat for days <= compAfter, compounded after that
+      if (day <= compAfter) {
+        basisPrincipal = principal;
+        isCompounded = false;
+      } else {
+        basisPrincipal = runningClosing;
+        isCompounded = true;
+      }
+    }
+
+    const units = basisPrincipal / 100000;
+    const interestAdded = Math.round(units * ratePerLakh);
+    const dayAgentComm = Math.round(units * agentCommissionRatePerLakh);
+
+    // Investor daily interest
+    let dayInvestorShare = 0;
+    if (investors && investors.length > 0) {
+      for (const inv of investors) {
+        const invUnits = (inv.amount || 0) / 100000;
+        dayInvestorShare += Math.round(invUnits * (inv.ratePerLakh || 0));
+      }
+    }
+    const cumulativeInvestorShare = dayInvestorShare * day;
+    const dayOwnerNetProfit = interestAdded - dayAgentComm - dayInvestorShare;
+
+    const openingPrincipal = isCompounded ? basisPrincipal : runningClosing;
+    runningClosing = runningClosing + interestAdded;
+    cumulativeAgentComm += dayAgentComm;
+
+    dailyBreakdown.push({
+      day,
+      openingPrincipal,
+      interestAdded,
+      closingBalance: runningClosing,
+      agentCommission: dayAgentComm,
+      cumulativeAgentCommission: cumulativeAgentComm,
+      isCompounded,
+      investorDailyShare: dayInvestorShare,
+      cumulativeInvestorShare,
+      ownerDayNetProfit: dayOwnerNetProfit,
+    });
+  }
+
+  const totalAmountExpected = runningClosing;
+  const grossInterest = totalAmountExpected - principal;
+  const totalUnits = principal / 100000;
+
+  // Investor calculations (Simpler linear daily interest: Amount * Rate * Days)
+  let investorTotalShare = 0;
+  const investorBreakdowns: FinancialBreakdown['investorBreakdowns'] = [];
+
+  if (investors && investors.length > 0) {
+    for (const inv of investors) {
+      const invUnits = (inv.amount || 0) / 100000;
+      const invShare = Math.round(invUnits * (inv.ratePerLakh || 0) * dCount);
+      investorTotalShare += invShare;
+      investorBreakdowns.push({
+        investorId: inv.investorId,
+        investorName: inv.investorName,
+        amount: inv.amount,
+        units: invUnits,
+        ratePerLakh: inv.ratePerLakh,
+        share: invShare,
+        settled: !!inv.settled,
+      });
+    }
+  }
+
+  const ownerNetProfit = grossInterest - cumulativeAgentComm - investorTotalShare;
+
+  return {
+    durationDays: dCount,
+    principal,
+    totalUnits,
+    grossInterest,
+    totalInterestAccrued: grossInterest,
+    totalAmountExpected,
+    agentCommission: cumulativeAgentComm,
+    investorTotalShare,
+    totalInvestorShare: investorTotalShare,
+    ownerNetProfit,
+    investorBreakdowns,
+    ratePerLakh,
+    agentCommissionRatePerLakh,
+    graceDays: compAfter,
+    enableCompounding,
+    compoundAfterDays: compAfter,
+    dailyBreakdown,
+  };
+}
+
 /**
  * Core business calculation for Gold Loan Balance Transfer:
  * customerRatePerLakh is per ₹1 Lakh per day (e.g., ₹2,000 / 1L / day)
@@ -127,7 +306,7 @@ export interface FinancialBreakdown {
  * agentCommissionRate is per ₹1 Lakh per day (e.g., ₹400 / 1L / day) on total principal
  */
 export function calculateFinancials(
-  tx: Pick<Transaction, 'principal' | 'givenDate' | 'returnDate' | 'customerRatePerLakh' | 'ratePeriod' | 'enableProfitSharing' | 'agentCommissionRatePerLakh' | 'investors'>,
+  tx: Pick<Transaction, 'principal' | 'givenDate' | 'returnDate' | 'customerRatePerLakh' | 'ratePeriod' | 'enableProfitSharing' | 'agentCommissionRatePerLakh' | 'investors' | 'graceDays'>,
   customDays?: number
 ): FinancialBreakdown {
   const durationDays = customDays !== undefined 
@@ -135,8 +314,37 @@ export function calculateFinancials(
     : calculateDurationDays(tx.givenDate, tx.returnDate);
 
   const principal = tx.principal || 0;
-  const totalUnits = principal / 100000; // e.g. 4.0 for 4 Lakhs
   const ratePeriod = tx.ratePeriod || 'per_day';
+
+  // If daily rate, use the exact compounding logic (using tx.graceDays or defaulting based on principal)
+  if (ratePeriod === 'per_day') {
+    const effectiveGraceDays = tx.graceDays !== undefined ? tx.graceDays : getDefaultGraceDays(principal);
+    const compoundRes = calculateCompoundDeal({
+      principal,
+      ratePerLakh: tx.customerRatePerLakh || 0,
+      agentCommissionRatePerLakh: (tx.enableProfitSharing || (tx.agentCommissionRatePerLakh && tx.agentCommissionRatePerLakh > 0)) 
+        ? (tx.agentCommissionRatePerLakh || 0) 
+        : 0,
+      durationDays,
+      graceDays: effectiveGraceDays,
+      investors: (tx.enableProfitSharing || (tx.investors && tx.investors.length > 0)) ? (tx.investors || []) : [],
+    });
+
+    return {
+      durationDays,
+      principal,
+      totalUnits: compoundRes.totalUnits,
+      grossInterest: compoundRes.grossInterest,
+      totalAmountExpected: compoundRes.totalAmountExpected,
+      agentCommission: compoundRes.agentCommission,
+      investorTotalShare: compoundRes.investorTotalShare,
+      ownerNetProfit: compoundRes.ownerNetProfit,
+      dailyBreakdown: compoundRes.dailyBreakdown,
+      investorBreakdowns: compoundRes.investorBreakdowns,
+    };
+  }
+
+  const totalUnits = principal / 100000; // e.g. 4.0 for 4 Lakhs
   
   let timeMultiplier = durationDays;
   if (ratePeriod === 'per_month') {

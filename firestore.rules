@@ -49,6 +49,11 @@ service cloud.firestore {
         allow delete: if isOwner(userId) && isValidId(transactionId);
       }
 
+      // Agent Khata Ledger
+      match /khata/{entryId} {
+        allow get, list, create, update, delete: if isOwner(userId) && isValidId(entryId);
+      }
+
       // Agents
       match /agents/{agentId} {
         allow get: if isOwner(userId) && isValidId(agentId);

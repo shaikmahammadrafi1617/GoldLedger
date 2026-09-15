@@ -7,7 +7,8 @@ import {
   InvestorContribution,
   ActivityLog, 
   OwnerSettings, 
-  Language 
+  Language,
+  AgentKhataEntry
 } from './types';
 import { 
   initialTransactions, 
@@ -16,7 +17,7 @@ import {
   initialLogs, 
   initialSettings 
 } from './data/initialData';
-import { getTodayDateString, calculateDurationDays, calculateFinancials, formatINR, formatDateReadable } from './utils/formatters';
+import { getTodayDateString, calculateDurationDays, calculateFinancials, formatINR, formatDateReadable, getDefaultGraceDays } from './utils/formatters';
 
 // Firebase
 import { auth, signInWithGoogle, logOut } from './firebase';
@@ -26,14 +27,18 @@ import {
   deleteTransactionFromFirestore,
   clearAllUserDataFromFirestore,
   saveAgentToFirestore, 
+  deleteAgentFromFirestore,
   saveInvestorToFirestore, 
   saveLogToFirestore, 
-  saveSettingsToFirestore 
+  saveSettingsToFirestore,
+  saveKhataEntryToFirestore,
+  deleteKhataEntryFromFirestore
 } from './services/firestoreService';
 
 // Android Components
 import { AndroidHeader } from './components/android/AndroidHeader';
 import { AndroidBottomNav } from './components/android/AndroidBottomNav';
+import { AgentKhataTab } from './components/android/AgentKhataTab';
 import { NewDealTab } from './components/android/NewDealTab';
 import { ActiveDealsTab } from './components/android/ActiveDealsTab';
 import { CalendarTab } from './components/android/CalendarTab';
@@ -55,6 +60,7 @@ const STORAGE_KEY_INVESTORS = 'goldledger_investors_v2';
 const STORAGE_KEY_LOGS = 'goldledger_logs_v2';
 const STORAGE_KEY_SETTINGS = 'goldledger_settings_v2';
 const STORAGE_KEY_LANG = 'goldledger_lang_v2';
+const STORAGE_KEY_KHATA = 'goldledger_khata_v2';
 
 export function App() {
   // PWA Install state
@@ -160,8 +166,18 @@ export function App() {
     }
   });
 
-  // Current Android Tab
-  const [currentTab, setCurrentTab] = useState<string>('new-deal');
+  // Agent Running Khata Entries
+  const [khataEntries, setKhataEntries] = useState<AgentKhataEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_KHATA);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Current Android Tab - default to Agent Khata
+  const [currentTab, setCurrentTab] = useState<string>('khata');
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
 
@@ -222,12 +238,23 @@ export function App() {
       onSettings: (serverSettings) => {
         if (serverSettings) setSettings(serverSettings);
       },
+      onKhata: (serverKhata) => {
+        setKhataEntries(serverKhata);
+      },
     });
 
     return () => unsubData();
   }, [user?.uid]);
 
   // Sync state changes to localStorage as offline cache
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_KHATA, JSON.stringify(khataEntries));
+    } catch (e) {
+      console.error('Failed to persist khata', e);
+    }
+  }, [khataEntries]);
+
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(transactions));
@@ -336,6 +363,7 @@ export function App() {
       givenDate: txData.givenDate || getTodayDateString(),
       customerRatePerLakh: txData.customerRatePerLakh || 100,
       ratePeriod: txData.ratePeriod || 'per_day',
+      graceDays: txData.graceDays !== undefined ? txData.graceDays : getDefaultGraceDays(txData.principal || 100000),
       status: 'active',
       enableProfitSharing: !!txData.enableProfitSharing,
       agentCommissionRatePerLakh: txData.agentCommissionRatePerLakh || 0,
@@ -479,15 +507,146 @@ export function App() {
     });
   };
 
+  // Agent Khata Handlers
+  const handleAddKhataEntry = async (entryData: Omit<AgentKhataEntry, 'id' | 'createdAt'>) => {
+    const newEntry: AgentKhataEntry = {
+      ...entryData,
+      id: `khata-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      createdAt: new Date().toISOString(),
+    };
+    setKhataEntries((prev) => [...prev, newEntry]);
+    if (user) {
+      try {
+        await saveKhataEntryToFirestore(user.uid, newEntry);
+      } catch (err) {
+        console.error('Failed to save khata entry to Firestore:', err);
+      }
+    }
+    setToast({
+      id: Date.now().toString(),
+      type: 'success',
+      message: language === 'te' ? 'ఖాతాలో ఎంట్రీ విజయవంతంగా చేర్చబడింది' : 'Khata entry added successfully',
+    });
+  };
+
+  const handleDeleteKhataEntry = async (id: string) => {
+    let updatedEntriesToSave: AgentKhataEntry[] = [];
+    setKhataEntries((prev) => {
+      const entryToDelete = prev.find((e) => e.id === id);
+      if (!entryToDelete) return prev;
+      const filtered = prev.filter((e) => e.id !== id);
+
+      // Recalculate and re-chain running balances for this agent
+      const agentId = entryToDelete.agentId;
+      const agentEntries = filtered
+        .filter((e) => e.agentId === agentId)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+      let runningBalance = 0;
+      const updatedAgentEntries = agentEntries.map((entry) => {
+        const prevBal = runningBalance;
+        let newBal = prevBal;
+
+        if (entry.type === 'give_cash' || entry.type === 'add_more') {
+          newBal = prevBal + (entry.principalGiven || 0) + (entry.interestAmount || 0);
+        } else if (entry.type === 'add_interest' || entry.type === 'rollover_compound') {
+          newBal = prevBal + (entry.interestAmount || 0);
+        } else if (entry.type === 'received_payment' || entry.type === 'settle_deal') {
+          newBal = Math.max(0, prevBal - (entry.paymentReceived || 0));
+        }
+
+        runningBalance = newBal;
+        return {
+          ...entry,
+          previousBalance: prevBal,
+          newBalance: newBal,
+        };
+      });
+
+      updatedEntriesToSave = updatedAgentEntries;
+      const otherEntries = filtered.filter((e) => e.agentId !== agentId);
+      return [...otherEntries, ...updatedAgentEntries];
+    });
+
+    if (user) {
+      try {
+        await deleteKhataEntryFromFirestore(user.uid, id);
+        for (const entry of updatedEntriesToSave) {
+          await saveKhataEntryToFirestore(user.uid, entry);
+        }
+      } catch (err) {
+        console.error('Failed to delete khata entry from Firestore:', err);
+      }
+    }
+    setToast({
+      id: Date.now().toString(),
+      type: 'info',
+      message: language === 'te' ? 'ఎంట్రీ తొలగించబడింది & బాకీ లెక్క అప్‌డేట్ అయింది' : 'Entry deleted & balance recalculated',
+    });
+  };
+
+  const handleQuickAddAgent = async (name: string, phone: string) => {
+    const newAgent: Agent = {
+      id: `agent-${Date.now()}`,
+      name,
+      phone,
+      active: true,
+      createdAt: new Date().toISOString(),
+    };
+    setAgents((prev) => [...prev, newAgent]);
+    if (user) {
+      try {
+        await saveAgentToFirestore(user.uid, newAgent);
+      } catch (err) {
+        console.error('Failed to save agent to Firestore:', err);
+      }
+    }
+    setToast({
+      id: Date.now().toString(),
+      type: 'success',
+      message: language === 'te' ? `ఏజెంట్ ${name} చేర్చబడ్డారు` : `Agent ${name} added`,
+    });
+  };
+
+  const handleDeleteAgent = async (agentId: string) => {
+    const targetAgent = agents.find((a) => a.id === agentId);
+    // Remove agent
+    setAgents((prev) => prev.filter((a) => a.id !== agentId));
+    // Also remove associated khata entries for this agent
+    const entriesToDelete = khataEntries.filter((e) => e.agentId === agentId);
+    setKhataEntries((prev) => prev.filter((e) => e.agentId !== agentId));
+
+    if (user) {
+      try {
+        await deleteAgentFromFirestore(user.uid, agentId);
+        for (const entry of entriesToDelete) {
+          await deleteKhataEntryFromFirestore(user.uid, entry.id);
+        }
+      } catch (err) {
+        console.error('Failed to delete agent from Firestore:', err);
+      }
+    }
+
+    setToast({
+      id: Date.now().toString(),
+      type: 'info',
+      message: language === 'te' 
+        ? `ఏజెంట్ "${targetAgent?.name || ''}" తొలగించబడ్డారు` 
+        : `Agent "${targetAgent?.name || ''}" deleted`,
+    });
+  };
+
   // Clear all data (Clean slate)
   const handleClearAllData = async () => {
     setTransactions([]);
+    setKhataEntries([]);
     setAgents([]);
     setInvestors([]);
     setLogs([]);
     setSettings(initialSettings);
     setDealToSettle(null);
     localStorage.removeItem(STORAGE_KEY_TRANSACTIONS);
+    localStorage.removeItem(STORAGE_KEY_KHATA);
     localStorage.removeItem(STORAGE_KEY_AGENTS);
     localStorage.removeItem(STORAGE_KEY_INVESTORS);
     localStorage.removeItem(STORAGE_KEY_LOGS);
@@ -591,6 +750,7 @@ export function App() {
           language={language}
           onLanguageChange={setLanguage}
           onOpenCalculator={() => setIsCalcOpen(true)}
+          onOpenCalendar={() => setCurrentTab('calendar')}
           onOpenBackup={() => setIsBackupOpen(true)}
           onLockApp={() => setIsLocked(true)}
           isInstallable={isInstallable}
@@ -638,6 +798,18 @@ export function App() {
 
         {/* Android Main App Scroll View */}
         <main className="flex-1 overflow-y-auto overscroll-contain relative bg-slate-100 pb-2">
+          {currentTab === 'khata' && (
+            <AgentKhataTab
+              agents={agents}
+              khataEntries={khataEntries}
+              language={language}
+              onAddEntry={handleAddKhataEntry}
+              onDeleteEntry={handleDeleteKhataEntry}
+              onAddAgent={handleQuickAddAgent}
+              onDeleteAgent={handleDeleteAgent}
+            />
+          )}
+
           {currentTab === 'new-deal' && (
             <NewDealTab
               onSaveTransaction={handleSaveTransaction}
